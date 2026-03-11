@@ -28,7 +28,10 @@ predict = dlib.shape_predictor("models/shape_predictor_68_face_landmarks.dat")
 (rStart, rEnd) = face_utils.FACIAL_LANDMARKS_68_IDXS["right_eye"]
 
 # ---------- CAMERA ----------
-cap = cv2.VideoCapture("libcamerasrc ! video/x-raw,width=640,height=480 ! videoconvert ! appsink", cv2.CAP_GSTREAMER)
+cap = cv2.VideoCapture(
+    "libcamerasrc ! video/x-raw,width=640,height=480 ! videoconvert ! appsink",
+    cv2.CAP_GSTREAMER
+)
 
 if not cap.isOpened():
     print("Camera not detected")
@@ -44,6 +47,9 @@ while True:
     if not ret:
         print("Frame not received")
         break
+
+    # Fix color format
+    frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
 
     frame = imutils.resize(frame, width=450)
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
@@ -69,28 +75,54 @@ while True:
         cv2.drawContours(frame, [leftEyeHull], -1, (0,255,0), 1)
         cv2.drawContours(frame, [rightEyeHull], -1, (0,255,0), 1)
 
+        # ---------- DISPLAY EAR ----------
+        cv2.putText(frame, f"EAR: {ear:.2f}",
+                    (300,30),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.6,
+                    (255,255,0),
+                    2)
+
+        # ---------- STATUS ----------
+        status = "AWAKE" if ear > thresh else "DROWSY"
+
+        cv2.putText(frame, status,
+                    (300,60),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.6,
+                    (0,255,0) if status=="AWAKE" else (0,0,255),
+                    2)
+
         # ---------- DROWSINESS DETECTION ----------
         if ear < thresh:
 
             flag += 1
             print(flag)
 
-            if flag >= frame_check:
+            # Slow beep
+            if flag > frame_check and flag < frame_check + 10:
+                buzzer.beep(on_time=0.4, off_time=0.4)
 
+            # Faster beep
+            elif flag >= frame_check + 10 and flag < frame_check + 20:
+                buzzer.beep(on_time=0.2, off_time=0.2)
+
+            # Continuous alarm
+            elif flag >= frame_check + 20:
                 buzzer.on()
 
-                cv2.putText(frame, "DROWSINESS ALERT!",
-                            (10,30),
-                            cv2.FONT_HERSHEY_SIMPLEX,
-                            0.7,
-                            (0,0,255),
-                            2)
+            cv2.putText(frame, "DROWSINESS ALERT!",
+                        (10,30),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.7,
+                        (0,0,255),
+                        2)
 
         else:
             flag = 0
             buzzer.off()
 
-    cv2.imshow("Frame", frame)
+    cv2.imshow("Driver Monitor", frame)
 
     key = cv2.waitKey(1) & 0xFF
 
