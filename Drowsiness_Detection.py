@@ -1,12 +1,15 @@
 import cv2
 import dlib
 import imutils
+import time
 from scipy.spatial import distance
 from imutils import face_utils
 from gpiozero import Buzzer
 
+
 # ---------- BUZZER ----------
 buzzer = Buzzer(17)   # GPIO17 (Pin 11)
+
 
 # ---------- FUNCTION ----------
 def eye_aspect_ratio(eye):
@@ -16,9 +19,11 @@ def eye_aspect_ratio(eye):
     ear = (A + B) / (2.0 * C)
     return ear
 
+
 # ---------- PARAMETERS ----------
 thresh = 0.25
 frame_check = 20
+
 
 # ---------- LOAD MODELS ----------
 detect = dlib.get_frontal_face_detector()
@@ -27,9 +32,10 @@ predict = dlib.shape_predictor("models/shape_predictor_68_face_landmarks.dat")
 (lStart, lEnd) = face_utils.FACIAL_LANDMARKS_68_IDXS["left_eye"]
 (rStart, rEnd) = face_utils.FACIAL_LANDMARKS_68_IDXS["right_eye"]
 
+
 # ---------- CAMERA ----------
 cap = cv2.VideoCapture(
-    "libcamerasrc ! video/x-raw,width=640,height=480 ! videoconvert ! appsink",
+    "libcamerasrc ! video/x-raw,width=640,height=480,format=BGR ! videoconvert ! appsink",
     cv2.CAP_GSTREAMER
 )
 
@@ -37,7 +43,10 @@ if not cap.isOpened():
     print("Camera not detected")
     exit()
 
+
 flag = 0
+last_beep = time.time()
+
 
 # ---------- MAIN LOOP ----------
 while True:
@@ -48,13 +57,12 @@ while True:
         print("Frame not received")
         break
 
-    # Fix color format
-    frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
 
     frame = imutils.resize(frame, width=450)
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
     subjects = detect(gray, 0)
+
 
     for subject in subjects:
 
@@ -75,6 +83,7 @@ while True:
         cv2.drawContours(frame, [leftEyeHull], -1, (0,255,0), 1)
         cv2.drawContours(frame, [rightEyeHull], -1, (0,255,0), 1)
 
+
         # ---------- DISPLAY EAR ----------
         cv2.putText(frame, f"EAR: {ear:.2f}",
                     (300,30),
@@ -82,6 +91,7 @@ while True:
                     0.6,
                     (255,255,0),
                     2)
+
 
         # ---------- STATUS ----------
         status = "AWAKE" if ear > thresh else "DROWSY"
@@ -93,23 +103,40 @@ while True:
                     (0,255,0) if status=="AWAKE" else (0,0,255),
                     2)
 
+
         # ---------- DROWSINESS DETECTION ----------
         if ear < thresh:
 
             flag += 1
             print(flag)
 
+            current_time = time.time()
+
             # Slow beep
             if flag > frame_check and flag < frame_check + 10:
-                buzzer.beep(on_time=0.4, off_time=0.4)
+
+                if current_time - last_beep > 0.8:
+                    buzzer.on()
+                    time.sleep(0.2)
+                    buzzer.off()
+                    last_beep = current_time
+
 
             # Faster beep
             elif flag >= frame_check + 10 and flag < frame_check + 20:
-                buzzer.beep(on_time=0.2, off_time=0.2)
+
+                if current_time - last_beep > 0.4:
+                    buzzer.on()
+                    time.sleep(0.2)
+                    buzzer.off()
+                    last_beep = current_time
+
 
             # Continuous alarm
             elif flag >= frame_check + 20:
+
                 buzzer.on()
+
 
             cv2.putText(frame, "DROWSINESS ALERT!",
                         (10,30),
@@ -119,15 +146,19 @@ while True:
                         2)
 
         else:
+
             flag = 0
             buzzer.off()
 
+
     cv2.imshow("Driver Monitor", frame)
+
 
     key = cv2.waitKey(1) & 0xFF
 
     if key == ord("q") or key == 27:
         break
+
 
 # ---------- CLEANUP ----------
 cap.release()
