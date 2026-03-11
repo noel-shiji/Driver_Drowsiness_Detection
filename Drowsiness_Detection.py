@@ -73,6 +73,10 @@ while True:
         rightEAR = eye_aspect_ratio(rightEye)
 
         ear = (leftEAR + rightEAR) / 2.0
+        ear = (leftEAR + rightEAR) / 2.0
+
+        cv2.putText(frame, f"EAR: {ear:.2f}", (10,60),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255,255,0), 2)
 
         # Draw eye contours
         leftEyeHull = cv2.convexHull(leftEye)
